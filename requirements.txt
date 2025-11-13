@@ -1,0 +1,10 @@
+absl-py
+accelerate
+datasets
+evaluate
+jiwer
+nltk
+peft
+rouge_score
+torch
+transformers
