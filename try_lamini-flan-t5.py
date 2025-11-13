@@ -18,8 +18,9 @@ print("✅ Models loaded")
 
 def correct_text(model, tokenizer, text, max_new_tokens=256):
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
+    #print(inputs)
     with torch.no_grad():
-        outputs = model.generate(**inputs, max_new_tokens=max_new_tokens)
+        outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False, early_stopping=True,num_beams=4)
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 prefix = "Correct this ASR transcript: "
@@ -35,7 +36,7 @@ for s in samples:
     print("🟡 Input:", s)
     base_out = correct_text(base_model, base_tokenizer, prefix + s)
     tuned_out = correct_text(finetuned_model, finetuned_tokenizer, prefix + s)
-    print("🔵 Base output:     ", base_out)
+    print("🔵 Base output:", base_out)
     print("🟢 Fine-tuned output:", tuned_out)
     print("-" * 80)
 

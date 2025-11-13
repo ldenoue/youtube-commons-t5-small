@@ -70,10 +70,20 @@ def preprocess(batch):
     )
 
     model_inputs["labels"] = labels["input_ids"]
+    model_inputs["labels"] = [
+        [(l if l != tokenizer.pad_token_id else -100) for l in label]
+        for label in model_inputs["labels"]
+    ]
     return model_inputs
 
-tokenized_datasets = dataset.map(preprocess, batched=True)
-
+#tokenized_datasets = dataset.map(preprocess, batched=True)
+tokenized_datasets = dataset.map(
+    preprocess,
+    batched=True,
+    remove_columns=["input_text", "target_text"],
+)
+print(dataset.column_names)
+print(tokenized_datasets["train"].column_names)
 # ----------------------------
 # 4️⃣ Metrics: WER + CER
 # ----------------------------
@@ -83,19 +93,21 @@ cer_metric = load("cer")
 def compute_metrics(eval_pred):
     preds, labels = eval_pred
     preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
+    labels = np.where(labels != -100, labels, tokenizer.pad_token_id)  # ✅ fix here
+
     decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
     decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-    return {
-        "wer": wer_metric.compute(predictions=decoded_preds, references=decoded_labels),
-        "cer": cer_metric.compute(predictions=decoded_preds, references=decoded_labels)
-    }
+
+    wer = wer_metric.compute(predictions=decoded_preds, references=decoded_labels)
+    cer = cer_metric.compute(predictions=decoded_preds, references=decoded_labels)
+    return {"wer": wer, "cer": cer}
 
 # ----------------------------
 # 5️⃣ Training arguments
 # ----------------------------
 training_args = Seq2SeqTrainingArguments(
     output_dir="./asr_lora",
-    eval_strategy="epoch",
+    evaluation_strategy="epoch",
     save_strategy="epoch",
     learning_rate=3e-4,
     per_device_train_batch_size=8,
@@ -109,7 +121,10 @@ training_args = Seq2SeqTrainingArguments(
     metric_for_best_model="wer",
     greater_is_better=False,
     save_total_limit=2,
-    fp16=True,
+    fp16=False,
+    bf16=False,
+    optim="adamw_torch",               # ✅ ensure no bitsandbytes
+    report_to="none",
 )
 
 # ----------------------------
@@ -125,7 +140,7 @@ trainer = Seq2SeqTrainer(
     args=training_args,
     train_dataset=tokenized_datasets["train"],
     eval_dataset=tokenized_datasets["validation"],
-    processing_class=tokenizer,
+    tokenizer=tokenizer,
     data_collator=data_collator,
     compute_metrics=compute_metrics,
 )
