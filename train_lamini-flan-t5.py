@@ -1,3 +1,4 @@
+import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForSeq2SeqLM,
@@ -16,7 +17,15 @@ import numpy as np
 # ----------------------------
 model_name = "MBZUAI/LaMini-Flan-T5-77M"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+#model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name, device_map="auto")
+
+if torch.cuda.is_available():
+    print("✅ Using CUDA GPU:", torch.cuda.get_device_name(0))
+elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+    print("✅ Using Apple Metal (MPS)")
+else:
+    print("⚙️ Using CPU")
 
 # ----------------------------
 # 2️⃣ Wrap model with LoRA
@@ -34,24 +43,34 @@ model = get_peft_model(model, lora_config)
 # ----------------------------
 # 3️⃣ Load / create dataset
 # ----------------------------
-data = [
-    {"input": "Correct this ASR transcript: i wanna go too the store",
-     "target": "I want to go to the store."},
-    {"input": "Correct this ASR transcript: he dont no what to do",
-     "target": "He doesn’t know what to do."},
-    # add your real ASR pairs here
-]
-#dataset = Dataset.from_list(data)
 dataset = load_from_disk("t5_asr_correction_dataset")
 train_dataset = dataset["train"]
 eval_dataset = dataset["validation"]
 
+prefix = "Correct this ASR transcript: "
+
 def preprocess(batch):
-    inputs = tokenizer(batch["input_text"], truncation=True, padding="max_length", max_length=128)
-    with tokenizer.as_target_tokenizer():
-        labels = tokenizer(batch["target_text"], truncation=True, padding="max_length", max_length=128)
-    inputs["labels"] = labels["input_ids"]
-    return inputs
+    # Combine prefix with each example
+    inputs = [prefix + x for x in batch["input_text"]]
+    targets = batch["target_text"]
+
+    # Tokenize both sides
+    model_inputs = tokenizer(
+        inputs,
+        truncation=True,
+        padding="max_length",
+        max_length=128,
+    )
+
+    labels = tokenizer(
+        targets,
+        truncation=True,
+        padding="max_length",
+        max_length=128,
+    )
+
+    model_inputs["labels"] = labels["input_ids"]
+    return model_inputs
 
 tokenized_datasets = dataset.map(preprocess, batched=True)
 

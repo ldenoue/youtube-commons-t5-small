@@ -8,3 +8,7 @@ peft
 rouge_score
 torch
 transformers
+optimum[onnxruntime]
+onnx
+onnxruntime
+bitsandbytes

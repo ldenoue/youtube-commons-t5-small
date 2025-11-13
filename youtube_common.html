@@ -3,25 +3,23 @@
     <meta charset="utf-8">
   </head>
 <body>
-  <script type="module">
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers';
+<script type="module">
+
+import { env, AutoTokenizer, AutoModelForSeq2SeqLM } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers';
 
 env.allowLocalModels = true;
+// Example: load q4int6 model
+const tokenizer = await AutoTokenizer.from_pretrained('./onnx_model');
+const model = await AutoModelForSeq2SeqLM.from_pretrained('./onnx_model', {quantized: false});
 
-// ✅ (Optional) set a default local path prefix for all models
-// For example, if your model files are at http://localhost:8080/onnx_export/
-env.localModelPath = "http://localhost:8000/";
-
-const model = await pipeline(
-  'text2text-generation',
-  'onnx_export',  // local or hosted path
-  { device: 'webgpu' } // uses WebGPU when available
-);
-
-const result = await model('this is a test without punctuation');
-console.log(result[0].generated_text);
+const input = "Correct this ASR transcript: i wanna go too the store";
+const inputs = await tokenizer.encode(input);
+const outputIds = await model.generate(inputs);
+const output = await tokenizer.decode(outputIds[0]);
+console.log(output); // "I want to go to the store."
 
 
-  </script>
+
+</script>
 </body>  
 </html>
